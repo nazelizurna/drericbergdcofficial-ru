@@ -1,0 +1,53 @@
+name: Translate Telegram posts
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:          # run manually from the Actions tab
+    inputs:
+      repost_last:
+        description: "Test: re-send the latest post of the source channel"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write             # needed to commit last_id.txt
+
+concurrency:
+  group: translate
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Tesseract and font
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tesseract-ocr fonts-dejavu-core
+
+      - name: Install Python packages
+        run: pip install -r requirements.txt
+
+      - name: Copy new posts
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          SOURCE: drericbergdcofficial
+          TARGET: "@drericbergdcofficialru"
+          REPOST_LAST: ${{ inputs.repost_last }}
+        run: python poll.py
+
+      - name: Save last processed post id
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add last_id.txt
+          git diff --cached --quiet || (git commit -m "Update last_id" && git push)
